@@ -1,0 +1,1356 @@
+---
+title: "Proyecto Final"
+author: "David Fernández y Franco Vicario"
+format: pdf
+editor: visual
+echo: false
+message: false
+warning: false
+---
+
+## Introducción
+
+```{r}
+library(tidyverse)
+student_mat <- read.table("student-mat.csv", sep = ";", header = TRUE)
+student_por <- read.table("student-por.csv", sep = ";", header = TRUE)
+
+# identificacion de columnas para el join
+identificador_columnas_join <- setdiff(
+  names(student_mat),
+  c("failures", "paid", "absences", "G1", "G2", "G3")
+)
+
+# columnas a renombrar
+columnas_a_traer_y_renombrar <- c("failures", "paid", "absences", "G1", "G2", "G3")
+
+identificador_columnas_join <- setdiff(names(student_mat), columnas_a_traer_y_renombrar)
+
+# preparacion del dataset de portugues para el join
+student_por_preparado <- student_por %>%
+  select(
+    all_of(identificador_columnas_join),
+    failures_por = failures,
+    paid_por = paid,
+    absences_por = absences,
+    G1_por = G1,
+    G2_por = G2,
+    G3_por = G3)
+
+# union de los datasets de matematica y portugues
+student_total <- student_mat %>%
+  left_join(student_por_preparado, by = identificador_columnas_join)
+
+# reubicacion de las nuevas columnas
+student_total <- student_total %>%
+  relocate(failures_por, .after = failures) %>%
+  relocate(paid_por, .after = paid) %>%
+  relocate(absences_por, .after = absences) %>%
+  relocate(G1_por, .after = G1) %>%
+  relocate(G2_por, .after = G2) %>%
+  relocate(G3_por, .after = G3)
+
+# renombrar columnas originales de matematica
+student_total <- student_total %>%
+  rename(
+    failures_mat = failures,
+    paid_mat = paid,
+    absences_mat = absences,
+    G1_mat = G1,
+    G2_mat = G2,
+    G3_mat = G3)
+```
+
+El rendimiento académico de los estudiantes es un factor crucial que da las bases para su futuro desarrollo profesional. Entender las diferentes variables que influyen en el rendimiento es de suma importancia para las instituciones educativas, debido a que permite identificar áreas donde puedan intervenir y poder diseñar estrategias de apoyo mas efectivas.
+
+Este trabajo tiene como objetivo principal explorar y analizar un conjunto de datos recopilados de estudiantes de secundaria de dos escuelas portuguesas, que incluye información personal, demográfica, socioeconómica, hábitos de estudio y sus calificaciones en matemática y portugués a lo largo de tres períodos: la primera prueba(G1), la segunda prueba (G2) y la calificación final (G3). La disponibilidad de calificaciones en ambas asignaturas nos permitirá buscar patrones, similitudes o diferencias en el rendimiento académico, explorando cómo diversas variables pueden influir de manera particular en cada materia.
+
+Para abordar este trabajo, nos planteamos responder a las siguientes preguntas fundamentales:
+
+-   ¿Cómo se compone demográficamenten los alumnos de estas escuelas?
+
+Analizaremos la distribución de variables clave como el sexo, la edad y los niveles educativos de los padres, comparando resultados entre ambas instituciones educativas.
+
+-   ¿Qué factores socioeconómicos, personales y académicos tienen la mayor influencia en el rendimiento de los estudiantes, no solo en la calificación final (G3) sino tambien en las primeras pruebas (G1 y G2)?
+
+Buscaremos si ciertos factores tienen un impacto diferenciado en las etapas de evaluacion del curso y sobretodo notar un impacto diferentenciado dependiendo de la asignatura.
+
+-   ¿Podemos desarrollar un modelo predictivo que estime la calificación final (G3) de un estudiante y que también sirva para detectar a tiempo a aquellos alumnos en riesgo de bajo rendimiento, facilitando la implementación de medidas de acompañamiento por parte de las escuelas ?
+
+Esto implicará evaluar la capacidad del modelo para prever el bajo rendimiento y su utilidad como herramienta para brindar apoyo temprano a los estudiantes.
+
+Para llevar a cabo este análisis, utilizaremos las herramientas disponibles en R. Iniciando con una exploración inicial y preparación de los datos, una construcción y evaluación de un modelo predictivo ya mencionado. Los hallazgos de este análisis nos ayudarán a comprender la implicancia de las caracteristicas del estudiante en su rendimiento académico.
+
+\newpage
+
+## Datos
+
+Para este estudio, usamos datos de estudiantes de secundaria de dos escuelas portuguesas. Estos datos fueron obtenidos de UCI Machine Learning, estos mismos fueron recolectados a través de informes escolares y cuestionarios realizados por Cortez y Silva en 2008.
+
+Se recolectó información sobre el rendimiento de los estudiantes en Matemáticas y en Portugués. Esto nos permitirá comparar cómo diversas variables pueden influir en el desempeño de los alumnos en cada una de estas materias.
+
+Es importante aclarar que disponemos de dos bases de datos separadas, una para Matemática y otra para Portugués. Ambas comparten la gran mayoría de las variables que no dependen de la materia( como las características demográficas). Aunque, hay variables que si tienen una relación directa con la asignatura, y por eso son diferentes en cada grupo de datos. Estas variables son: failures(paid(clases pagas extra), absences(ausencias), G1 ( primera prueba), G2(segunda prueba) y G3(calificación final). Para unificar y trabajar con ambos conjuntos, combinamos estas plantillas de datos diferenciando las variables específicas de cada materia ( por ejemplo, `paid_por` y `paid_mat`, `G1_por` y `G1_mat`, y así para las demás).
+
+El conjunto de datos contiene información sobre varias características de los estudiantes:
+
+| **Variable** | **Descripción** |
+|----|----|
+| `school` | Escuela del estudiante (`GP` = Gabriel Pereira, `MS` = Mousinho da Silveira) |
+| `sex` | Sexo del estudiante (`F` = femenino, `M` = masculino) |
+| `age` | Edad del estudiante (entre 15 y 22 años) |
+| `address` | Tipo de zona de residencia (`U` = urbana, `R` = rural) |
+| `famsize` | Tamaño de la familia (`LE3` = ≤3, `GT3` = \>3 miembros) |
+| `Pstatus` | Estado de convivencia de los padres (`T` = juntos, `A` = separados) |
+| `Medu` | Nivel educativo de la madre (0 = ninguno a 4 = educación superior) |
+| `Fedu` | Nivel educativo del padre (0 = ninguno a 4 = educación superior) |
+| `Mjob` | Profesión de la madre (`teacher`, `health`, `services`, `at_home`, `other`) |
+| `Fjob` | Profesión del padre (`teacher`, `health`, `services`, `at_home`, `other`) |
+| `reason` | Motivo para elegir la escuela (`home`, `reputation`, `course`, `other`) |
+| `guardian` | Tutor del estudiante (`mother`, `father`, `other`) |
+| `traveltime` | Tiempo de viaje a la escuela (1 = \<15 min a 4 = \>60 min) |
+| `studytime` | Tiempo de estudio semanal (1 = \<2h a 4 = \>10h) |
+| `failures` | Número de repeticiones de año (0 a 3 o más) |
+| `schoolsup` | Apoyo educativo escolar adicional (`yes`, `no`) |
+| `famsup` | Apoyo educativo familiar adicional (`yes`, `no`) |
+| `paid` | Clases extra pagas (`yes`, `no`) |
+| `activities` | Participación en actividades extracurriculares (`yes`, `no`) |
+| `nursery` | Asistencia a jardín de infantes (`yes`, `no`) |
+| `higher` | Desea cursar educación superior (`yes`, `no`) |
+| `internet` | Acceso a internet en el hogar (`yes`, `no`) |
+| `romantic` | Tiene una relación amorosa (`yes`, `no`) |
+| `famrel` | Relación familiar (1 = muy mala, 5 = excelente) |
+| `freetime` | Tiempo libre después de la escuela (1 = muy poco, 5 = mucho) |
+| `goout` | Frecuencia de salidas con amigos (1 = muy baja, 5 = muy alta) |
+| `Dalc` | Consumo de alcohol entre semana (1 = muy bajo, 5 = muy alto) |
+| `Walc` | Consumo de alcohol en fin de semana (1 = muy bajo, 5 = muy alto) |
+| `health` | Estado de salud percibido (1 = muy malo, 5 = muy bueno) |
+| `absences` | Número de ausencias escolares |
+| `G1` | Nota del primer período (0 a 20) |
+| `G2` | Nota del segundo período (0 a 20) |
+| `G3` | Nota final (0 a 20, variable objetivo) |
+
+\newpage
+
+## Análisis exploratorio
+
+Para abordar la primera pregunta fundamental de nuestro estudio: "¿Cómo se compone demográficamente los alumnos de estas escuelas?", hicimos un proceso de exploración y presentación de datos clave. Nuestro objetivo principal en esta etapa es entender la estructura y características de los estudiantes y como estas se distribuyen entre las dos instituciones educativas.
+
+A través de la generación de tablas de frecuencia, resúmenes estadísticos y gráficos de barras, encontramos conclusiones relevantes y relaciones notables entre estas variables. Este análisis inicial servirá para comprender la diversidad y las características de la población estudiantil, preparandonos para investigaciones más profundas sobre los factores que influyen en el rendimiento académico.
+
+Lo primero a modo de presentar los datos de manera clara, examinaremos la cantidad total de alumnos que integran nuestro conjunto de datos combinado.
+
+```{r}
+student_total %>%
+  count(school) %>%
+  mutate(Proportion = n / sum(n))
+```
+
+Podemos apreciar que la institucion GP contiene la gran mayoria de los alumnos a los cuales se obtuvieron sus datos, alrededor del 88,3%.
+
+Posteriormente, nos adentraremos en la distribucion de las variables demográficas que no tienen una relación directa con las calificaciones académicas finales, pero que son cruciales para entender los perfiles de los estudiante.
+
+-   **Composición por Sexo:** Analizaremos la proporción de hombres y mujeres, tanto a nivel global como desagregado por cada escuela, para identificar posibles desequilibrios o patrones específicos.
+
+    ```{r}
+    sex_stud_clase <- student_total %>%
+            count(school, sex) %>%
+            group_by(school) %>%
+            mutate(Proportion = n / sum(n)) %>%
+            ungroup()
+    print(sex_stud_clase)
+    ```
+
+    Podemos concluir que no hay diferencias significativas en la proprocion de alumnos de diferente sexo entre las escuelas. Aunque es una información valiosa ya que nuestras conclusiones pueden tomarse con mas generalidad y no influenciadas por un solo género.
+
+-   **Distribución por Edad:** Exploraremos el rango y las tendencias de edad de los estudiantes, comparando las medianas y dispersiones entre las escuelas para ver si existen diferencias significativas en la edad promedio de su alumnado.
+
+    ```{r}
+    dist_edad_escuela <- student_total %>% 
+      ggplot(aes(x = age, fill = school)) +
+      geom_bar(position = "dodge") +
+      facet_wrap(~school) +
+      labs(title = "Distribución por edad y por escuela", x = "Edad", y = "Cantidad de alumnos") +
+      theme_minimal()
+    dist_edad_escuela
+    ```
+
+    Vemos que la distribicion por edad son levemente diferentes entre escuelas, pero con una dispersion no tan grande. Aunque en la escuela GP halla una cola con edades atipicas altas.
+
+-   **Ubicación Geográfica (Urbano vs. Rural):** Determinaremos cuántos estudiantes provienen de entornos urbanos y cuántos de rurales, y cómo esta proporción varía entre las dos instituciones.
+
+    ```{r}
+    plot_address_by_school_percent <- ggplot(student_total, aes(x = school, fill = address)) +
+      geom_bar(position = "fill") + 
+      labs(
+        title = "Distribución del Tipo de Dirección por Escuela",
+        x = "Escuela",
+        y = "Porcentaje de Estudiantes"
+      ) +
+      scale_y_continuous(labels = scales::percent) +
+      theme_minimal()
+    print(plot_address_by_school_percent)
+    ```
+
+    Se aprecia una clara diferencia en el porcentaje de alumnos que vienen de un entorno rural entre las escuelas. Ya que mas de la mitad de los alumnos de la escuela MS(54,3%) provienen de un medio rural y tan solo un 18,1% de los alumnos de GP son del medio rural. Dando como una posible conclusión que la escuela MS se encuentra mas alejada de la urbanización con respecto a la escuela GP. Podemos asociar esto a la gran diferencia en la cantidad de alumnos pertenecientes a cada escuela.
+
+-   **Acceso a Internet:** Evaluaremos la proporción de estudiantes que tienen acceso a internet en casa, una variable socioeconómica que considermamos clave ya que puede afectar el acceso a recursos educativos y la forma en que se interactúa con las tareas escolares, analizando si hay diferencias entre zonas urbanas y rurales.
+
+    ```{r}
+    internet_grupo <- student_total %>%
+      group_by(address)  %>%
+      count(internet) %>%
+      mutate(Proportion = n / sum(n))
+    print(internet_grupo)
+
+    plot_internet_proportion_by_address <- ggplot(internet_grupo, aes(x = internet, y = Proportion, fill = internet)) +
+      geom_bar(stat = "identity") +
+      facet_wrap(~ address) +
+      labs(title = "Porcentaje de Acceso a Internet por Zona ",
+        x = "Acceso a Internet",
+        y = "Proporción de Estudiantes") +
+      scale_y_continuous(labels = scales::percent) +
+      theme(panel.border = element_rect(colour = "grey", fill = NA))
+    print(plot_internet_proportion_by_address)
+    ```
+
+    Se termina observando algo que podia intuirse, que la propoción de estudiantes sin internet que son de zonas rurales es mayor.
+
+-   **Tiempo de Viaje a la Escuela:** Examinaremos cuánto tiempo tardan los estudiantes en llegar a la escuela, y cómo este factor se relaciona con su origen urbano/rural, así como con la razón principal por la que eligieron su institución educativa. Este análisis nos permitirá identificar posibles desafíos logísticos o preferencias geográficas. Primerameente debemos de crear
+
+    ```{r}
+    traveltime_labels <- c(
+      "1" = "<15 min",
+      "2" = "15-30 min",
+      "3" = "30-60 min",
+      "4" = ">60 min"
+    )
+
+    student_total <- student_total %>%
+      mutate(
+        traveltime_label = factor(traveltime, levels = 1:4, labels = traveltime_labels)
+      )
+    traveltime_summary_by_address <- student_total %>%
+      group_by(address) %>%
+      summarise(
+        Media_traveltime = mean(traveltime),
+        mediana_traveltime = median(traveltime),
+        SD_traveltime = sd(traveltime),
+        .groups = 'drop'
+      )
+
+    traveltime_proportion_by_address <- student_total %>%
+      group_by(address, traveltime_label) %>%
+      summarise(n = n(), .groups = 'drop') %>%
+      group_by(address) %>%
+      mutate(Proportion = n / sum(n)) %>%
+      ungroup()
+
+    plot_traveltime_by_address_percent <- ggplot(traveltime_proportion_by_address, aes(x = traveltime_label, y = Proportion, fill = traveltime_label)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      facet_wrap(~ address) +
+      labs(
+        title = "Distribución Porcentual del Tiempo de Viaje por Zona",
+        x = "Tiempo de Viaje",
+        y = "Proporción de Estudiantes"
+      ) +
+      scale_y_continuous(labels = scales::percent) + 
+      theme_minimal() +
+      theme(
+        legend.position = "none", 
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.border = element_rect(colour = "grey", fill = NA) 
+      )
+    print(plot_traveltime_by_address_percent)
+
+    ```
+
+    Observamos que los la alumnos de un medio urbano tienen una mayor proporcion de un tiempo de viaje menor a 15 minutos, es entndible ya que a diferencia de una zona urbana todo esta mas concentrado en un sitio.
+
+-   **Reprobaciones y edad:** Exploraremos la cantidad de reprobaciones de los estudiantes y si es posible plantear algun tipo de relacion entre estas y la edad de los mismos. Este analisis nos permitira identificar tendencias generales, trayectorias educativas mas inestables o desafios particulares, identificar perfiles de riesgo y deducir que edad puede llegar a ser una variable relevante para predecir reprobaciones.
+
+    ```{r}
+    #reprobaciones en matematica 
+     edad_materias_rep_mat <- student_total %>% 
+      ggplot(aes(x = as.factor(failures_mat), y = age, fill = factor(failures_mat))) +
+      geom_boxplot() +
+      labs(title = "Edad según número de reprobaciones en matematica", x = "Reprobaciones", y = "Edad", fill = "Reprobaciones") +
+      theme_minimal()
+     print(edad_materias_rep_mat)
+     
+     #reprobaciones en portugues
+     edad_materias_rep_por <- student_total %>% filter(!is.na(failures_por)) %>%
+       ggplot(aes(x = as.factor(failures_por), y = age, fill = factor(failures_por))) +
+       geom_boxplot() +
+       labs(title = "Edad según número de reprobaciones en portugues", x = "Reprobaciones", y = "Edad", fill = "Reprobaciones") +
+       theme_minimal()
+     print(edad_materias_rep_por)
+     
+    ```
+
+Este boxplot muestra una relación positiva entre la edad del estudiante y el número de fracasos acumulados en matemáticas y portugués. Los estudiantes con menos fracasos (0 ) tienden a ser los más jóvenes y con un rango de edad más concentrado.
+
+A medida que aumenta el número de fracasos (1, 2 y 3 ), la mediana de la edad se incrementa y también se observa una mayor dispersión de edades, incluyendo estudiantes bastante mas mayores en los grupos con más fracasos.
+
+Esto nos dice que la cantidad de fracasos puede estar asociado con un avance académico mas lento.
+
+### Análisis del Impacto de los Factores demograficos en el Rendimiento Académico
+
+Habiendo indagado en la composición demográfica y académica inicial de los estudiantes, nuestro siguiente enfasis será responder a la segunda pregunta central de este estudio: "¿Qué factores socioeconómicos y de estilo de vida tienen mayor impacto en el rendimiento académico de los estudiantes?"
+
+Para abordar esta pregunta, profundizaremos en una serie de variables que reflejan el entorno familiar, las actividades extraescolares y los hábitos de vida de los alumnos. Dando enfasis en factores directamente relacionados con la materia en estudio. El objetivo es identificar patrones y correlaciones que puedan mostrarnos una influencia significativa en sus calificaciones finales en Matemáticas y Portugués. Este análisis nos permitirá ir mas alla de las características básicas de los alumnos y explorar como aspectos de su vida diaria y su contexto social se relacionan con su desempeño escolar. Destacaremos aquellas que parecen tener un mayor peso en el rendimiento académico.
+
+A modo de darle una introducción a las calificaciones y antes de involucrar los factores externos, es importante entender la estructura de las calificaciones. Los datos de los estudiantes incluyen tres calificaciones por materia: G1 (calificación del primer período), G2 (calificación del segundo período) y G3 (la evaluación final).
+
+Además, a modo de poder obtener resultados más detallados y que nos permitan categorizar el rendimiento de manera más granular, hemos creado una nueva columna en nuestro conjunto de datos. Esta columna divide las calificaciones finales (G3) en categorías cualitativas: "Excelente" (si G3 es mayor o igual a 16), "Bueno" (entre 14 y 15), "Satisfactorio" (entre 12 y 13), "Suficiente" (entre 10 y 11), y "Insuficiente" (entre 0 y 9). Esta categorización nos facilitará el análisis de cómo los diferentes factores socioeconómicos y de estilo de vida se asocian con distintos niveles de desempeño académico.
+
+```{r}
+student_total <- student_total %>%
+  mutate(calificacion_final_mat = case_when(
+      G3_mat >= 16 ~ "Excelente",
+      G3_mat >= 14 & G3_mat <= 15 ~ "Bueno",
+      G3_mat >= 12 & G3_mat <= 13 ~ "Satisfactorio",
+      G3_mat >= 10 & G3_mat <= 11 ~ "Suficiente",
+      G3_mat >= 0 & G3_mat <= 9 ~ "Insuficiente"),
+    calificacion_final_por = case_when(
+      G3_por >= 16 ~ "Excelente", 
+      G3_por >= 14 & G3_por <= 15 ~ "Bueno",
+      G3_por >= 12 & G3_por <= 13 ~ "Satisfactorio",
+      G3_por >= 10 & G3_por <= 11 ~ "Suficiente",
+      G3_por >= 0 & G3_por <= 9 ~ "Insuficiente")) %>%
+  #movemos las columnas nuevas
+  relocate(calificacion_final_mat, .after = G3_mat) %>%
+  relocate(calificacion_final_por, .after = G3_por)
+
+# orden de las categorías
+orden_cal <- c("Insuficiente", "Suficiente", "Satisfactorio", "Bueno", "Excelente")
+
+# aplicamos ese orden a nuestras nuevas categorías
+student_total <- student_total %>%
+  mutate(
+    calificacion_final_mat = factor(calificacion_final_mat, levels = orden_cal),
+    calificacion_final_por = factor(calificacion_final_por, levels = orden_cal))
+```
+
+Para tener una primera aproximación a los resultados y entender el panorama general, presentaremos la cantidad de alumnos aprobados y no aprobados por materia, considerando que la aprobación se logra con una calificación final de 10 o más. Empezaremos con los datos correspondientes a matematica.
+
+```{r}
+# alumnos aprobados y no aprobados en matematica
+alumnos_aprobados_mat <- sum(student_total$G3_mat >= 10)
+alumnos_no_aprobados_mat <- sum(student_total$G3_mat < 10)
+
+# tabla resumen de aprobación
+data_aprobacion_mat <- tibble(
+  Estado_Aprobacion = c("Aprobado", "No Aprobado"),
+  Cantidad = c(alumnos_aprobados_mat, alumnos_no_aprobados_mat)
+)
+print(data_aprobacion_mat)
+
+# grafico de barras de aprobación en Matematica
+plot_aprobacion_mat_counts <- ggplot(data_aprobacion_mat, aes(x = Estado_Aprobacion, y = Cantidad, fill = Estado_Aprobacion)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Alumnos Aprobados y No Aprobados en Matemática",
+    subtitle = "Aprobación: Calificación Final (G3) >= 10",
+    x = "Aprobación",
+    y = "Número de Estudiantes") +
+  scale_fill_manual(values = c("Aprobado" = "darkgreen", "No Aprobado" = "red"))  
+
+plot_aprobacion_mat_counts
+```
+
+```{r}
+# total de alumnos evaluados en Matemática
+total_alumnos_mat_evaluados <- length((student_total$G3_mat))
+
+# proporcion de aprobados y no aprobados en Matematica
+proporcion_aprobados_mat <- alumnos_aprobados_mat / total_alumnos_mat_evaluados
+proporcion_no_aprobados_mat <- alumnos_no_aprobados_mat / total_alumnos_mat_evaluados
+
+# tabla resumen con cantidades y proporciiones
+resultados_matematicas <- tibble(
+  Estado = c("Aprobado", "No Aprobado"),
+  Cantidad = c(alumnos_aprobados_mat, alumnos_no_aprobados_mat),
+  Proporcion = c(proporcion_aprobados_mat, proporcion_no_aprobados_mat))
+print(resultados_matematicas)
+```
+
+En Matemáticas, la mayoría de los estudiantes aprueban, siendo un 67% . No obstante, un tercio de los alumnos (32.9%) no logran la aprobación, lo que indica un grupo considerable al que se necesitaría brindar atención.
+
+Procederemos a hacer lo mismo para los datos referidos a la materia Portugues.
+
+```{r}
+# cantidad de aprobados y no aprobados en port
+ alumnos_aprobados_por <- sum(student_total$G3_por >= 10, na.rm = TRUE)
+ alumnos_no_aprobados_por <- sum(student_total$G3_por < 10, na.rm = TRUE)
+ 
+ # tabla resumen
+ data_aprobacion_por <- tibble(
+   Estado_Aprobacion = c("Aprobado", "No Aprobado"),
+   Cantidad = c(alumnos_aprobados_por, alumnos_no_aprobados_por))
+ print(data_aprobacion_por)
+ 
+ # grafico de barras
+ plot_aprobacion_por_counts <- ggplot(data_aprobacion_por, aes(x = Estado_Aprobacion, y = Cantidad, fill = Estado_Aprobacion)) +
+   geom_bar(stat = "identity") +
+   labs(
+     title = "Alumnos Aprobados y No Aprobados en Portugués",
+     subtitle = "Aprobación: Calificación Final (G3_por) >= 10",
+     x = "Aprobación",
+     y = "Numero de Estudiantes"
+   ) +
+   scale_fill_manual(values = c("Aprobado" = "darkgreen", "No Aprobado" = "red")) +
+   theme_minimal()
+ 
+ print(plot_aprobacion_por_counts)
+ 
+ total_alumnos_por_evaluados <- length((student_total$G3_por))
+ 
+ # proporciones
+ proporcion_aprobados_por <- alumnos_aprobados_por / total_alumnos_por_evaluados
+ proporcion_no_aprobados_por <- alumnos_no_aprobados_por / total_alumnos_por_evaluados
+ 
+ # resumen con un tibble
+ resultados_portugues <- tibble(
+   Estado = c("Aprobado", "No Aprobado"),
+   Cantidad = c(alumnos_aprobados_por, alumnos_no_aprobados_por),
+   Proporcion = c(proporcion_aprobados_por, proporcion_no_aprobados_por))
+
+ print(resultados_portugues)
+```
+
+En lo que refiere a portugues, un 92% de los alumnos aprueban la materia, siendo este un grupo mas que considerable de gente. Esto podria estar mas que nada asociado a que esta es la lengua materna de los alumnos, lo que supondria cierta facilidad en el manejo de esta.
+
+A continuacion mostraremos cómo diversos factores de la vida diaria de los estudiantes pueden afectar su rendimiento académico. Para ello, analizaremos variables relacionadas con el entorno familiar y los hábitos de estudio, buscando identificar cuales presentan una asociación más marcada con las calificaciones finales en ambas materias.
+
+-   **Nivel educativo de los padres:** Presentaremos una descripcion del nivel academico de los padres y la relacion que existe entre estos y el rendimiento de sus hijos. Este analisis nos permitira observar si existe una clara influencia de los padres y su nivel academico sobre el rendimiento que sus hijos muestran en la escuela.
+
+    ```{r}
+    #Este primer grafico muestra la distribucion del nivel educativo tanto de los padres como de las madres de los alumnos de forma general.
+    nivel_edu_pym <- student_total %>% 
+      select(Medu, Fedu) %>% 
+      pivot_longer(cols = c(Medu, Fedu), names_to = "parent", values_to = "education") %>% 
+      mutate(parent = recode(parent, Medu = "Madre", Fedu = "Padre")) %>% 
+      ggplot(aes(x = as.factor(education), fill = parent)) +
+      geom_bar(position = "dodge") +
+      labs(title = "Nivel educativo de los padres y madres", 
+           x = "Nivel educativo (0-4)", y = "Cantidad", fill = "Progenitor") +
+      theme_minimal()
+    nivel_edu_pym
+    #En este segundo grafico se muestra la distribucion del nivel educativo de los padres separado por escuela
+    nivel_edu_pym_escuela <- student_total%>% select(school, Medu, Fedu) %>% 
+      pivot_longer(cols = c(Medu, Fedu), names_to = "parent", values_to = "education") %>% 
+      mutate(parent = recode(parent, Medu = "Madre", Fedu = "Padre")) %>% 
+      ggplot(aes(x = as.factor(education), fill = parent)) +
+      geom_bar(position = "dodge") +
+      facet_wrap(~school) +
+      labs(title = "Nivel educativo de progenitor por escuela", 
+           x = "Nivel educativo (0-4)", y = "Cantidad", fill = "Progenitor") +
+      theme_minimal()
+    nivel_edu_pym_escuela
+    # Medias generales del nivel educativo de madres y padres general
+    student_total %>% 
+      summarise(
+        media_madre = mean(Medu, na.rm = TRUE),
+        media_padre = mean(Fedu, na.rm = TRUE)
+      )
+    # Medias por escuela del nivel educativo de madres y padres
+    student_total %>% 
+      group_by(school) %>% 
+      summarise(
+        media_madre = mean(Medu, na.rm = TRUE),
+        media_padre = mean(Fedu, na.rm = TRUE)
+      )
+
+    ```
+
+    En base a lo presentado es posible ver como en ambas escuelas las madres tienen un mayor nivel educativo que los padres. Tambien es posible observar que en promedio tanto padres como madres de la escuela GP tienen un mayor nivel educativo que los de la escuela MS.
+
+    ```{r}
+    #Con los siguientes graficos mostraremos la relacion entre el nivel educativo de los padres y los resultados academicos de los alumnos
+    library(GGally)
+    p_ggpairs_edu_parents_mat <- student_total %>% 
+      select(G3_mat, Medu, Fedu) %>% 
+      ggpairs(title = "Relación entre G3_mat y nivel educativo de padres y madres")
+    print(p_ggpairs_edu_parents_mat)
+    p_ggpairs_edu_parents_port <- student_total %>% 
+      select(G3_por, Medu, Fedu) %>% 
+      ggpairs(title = "Relación entre G3_port y nivel educativo de padres y madres")
+    print(p_ggpairs_edu_parents_port)
+    ```
+
+    Ambos graficos nos dejan ver que en ambas materias, tanto el nivel educativo de las madres como de los padres tienen una relacion positiva con el rendimiento academico de los hijos, aunque esta no pareciera ser muy significante.
+
+-   **Trabajo de los padres:** Esta es una variable que va de la mano con el nivel educativo de los padres. Padres con trabajos profesionales suelen tener un nivel educativo mas alto, esto podria implicar ayudas en las tareas, motivar el estudio, mayor valoracion de la educacion formal y mayores recursos economicos. A continuacion presentaremos dos graficos por materia que muestran la distribucion de las calificaciones finales de los alumnos dividida por el tipo de trabajo de los padres y madres.
+
+    ```{r}
+    # Eliminar NA y agrupar
+     df_plot <- student_total %>%
+       filter(!is.na(calificacion_final_mat), !is.na(Fjob)) %>%
+       count(Fjob, calificacion_final_mat) %>%
+       group_by(Fjob) %>%
+       mutate(prop = n / sum(n))
+     
+     # Gráfico de barras apiladas proporcionales
+     ggplot(df_plot, aes(x = Fjob, y = prop, fill = calificacion_final_mat)) +
+       geom_col(position = "fill") +
+       scale_y_continuous(labels = scales::percent_format()) +
+       
+       labs(
+         title = "Calificaciones finales en Matemáticas por trabajo del padre",
+         x = "Trabajo del padre",
+         y = "Proporción de estudiantes",
+         fill = "Calificación"
+       ) +
+       theme_minimal()
+     
+    ```
+
+    ```{r}
+    # Eliminar NA y agrupar por trabajo de la madre
+    df_plot_madre_mat <- student_total %>%
+      filter(!is.na(calificacion_final_mat), !is.na(Mjob)) %>%
+      count(Mjob, calificacion_final_mat) %>%
+      group_by(Mjob) %>%
+      mutate(prop = n / sum(n))
+
+    # Gráfico de barras apiladas proporcionales - madre
+    ggplot(df_plot_madre_mat, aes(x = Mjob, y = prop, fill = calificacion_final_mat)) +
+      geom_col(position = "fill") +
+      scale_y_continuous(labels = scales::percent_format()) +
+      labs(
+        title = "Calificaciones finales en Matemática por trabajo de la madre",
+        x = "Trabajo de la madre",
+        y = "Proporción de estudiantes",
+        fill = "Calificación"
+      ) +
+      theme_minimal()
+    ```
+
+    ```{r}
+    # agrupar por trabajo del padre
+    df_plot_padre_por <- student_total %>%
+      filter(!is.na(calificacion_final_por), !is.na(Fjob)) %>%
+      count(Fjob, calificacion_final_por) %>%
+      group_by(Fjob) %>%
+      mutate(prop = n / sum(n))
+
+    # grafico de barras apiladas proporcionales - padre
+    ggplot(df_plot_padre_por, aes(x = Fjob, y = prop, fill = calificacion_final_por)) +
+      geom_col(position = "fill") +
+      scale_y_continuous(labels = scales::percent_format()) +
+      labs(
+        title = "Calificaciones finales en Portugués por trabajo del padre",
+        x = "Trabajo del padre",
+        y = "Proporción de estudiantes",
+        fill = "Calificación"
+      ) +
+      theme_minimal()
+
+    ```
+
+    ```{r}
+    # agrupar por trabajo de la madre
+    df_plot_madre_por <- student_total %>%
+      filter(!is.na(calificacion_final_por), !is.na(Mjob)) %>%
+      count(Mjob, calificacion_final_por) %>%
+      group_by(Mjob) %>%
+      mutate(prop = n / sum(n))
+
+    # grafico de barras apiladas proporcionales - madre
+    ggplot(df_plot_madre_por, aes(x = Mjob, y = prop, fill = calificacion_final_por)) +
+      geom_col(position = "fill") +
+      scale_y_continuous(labels = scales::percent_format()) +
+      labs(
+        title = "Calificaciones finales en Portugués por trabajo de la madre",
+        x = "Trabajo de la madre",
+        y = "Proporción de estudiantes",
+        fill = "Calificación"
+      ) +
+      theme_minimal()
+
+
+    ```
+
+    Tanto en Matemática como en Portugués, el desempeño académico de los estudiantes se ve influenciado por el trabajo de sus padres, siendo más favorable cuando los progenitores se desempeñan en áreas relacionadas con la educación, la salud o funciones administrativas. Esto podría explicarse por factores como el nivel educativo de los padres, la disponibilidad de tiempo para el acompañamiento escolar, y el valor que se le da al estudio dentro del hogar
+
+-   **Apoyos escolares y familiares:** Este análisis examina cómo distintos tipos de apoyo, escolar extra, familiar y clases particulares pagadas, se relacionan con las calificaciones finales (`G3`) en las materias de Matemáticas y Portugués. Entender esta relación es crucial para identificar qué estrategias de apoyo podrían ser más efectivas y orientar políticas educativas que busquen mejorar el desempeño de los estudiantes, especialmente aquellos con mayores dificultades.
+
+    ```{r}
+    # Reorganizamos los datos para facilitar la comparación de apoyos y calificaciones
+     student_apoyos_long <- student_total %>%
+       select(schoolsup, famsup, paid = paid_mat, G3_mat, G3_por) %>%
+       pivot_longer(
+         cols = c(schoolsup, famsup, paid),
+         names_to = "tipo_apoyo",
+         values_to = "apoyo"
+       ) %>%
+       pivot_longer(
+         cols = c(G3_mat, G3_por),
+         names_to = "materia",
+         values_to = "G3"
+       ) %>%
+       mutate(
+         materia = recode(materia,
+                          G3_mat = "Matemáticas",
+                          G3_por = "Portugués"),
+         tipo_apoyo = recode(tipo_apoyo,
+                             schoolsup = "Apoyo escolar",
+                             famsup = "Apoyo familiar",
+                             paid = "Clases particulares pagadas"),
+         apoyo = factor(apoyo, levels = c("no", "yes"))
+       )
+     
+     # gráfico combinado
+     ggplot(student_apoyos_long, aes(x = apoyo, y = G3, fill = apoyo)) +
+       geom_boxplot() +
+       facet_grid(materia ~ tipo_apoyo) +
+       labs(
+         title = "Notas finales según tipo de apoyo recibido",
+         x = "¿Recibió apoyo?",
+         y = "Nota final (G3)",
+         fill = "Apoyo"
+       ) +
+       theme_minimal()
+     
+    ```
+
+    En el caso de las clases pagadas es posible ver como en ambas materias, los estudiantes que recibieron clases particulares tienden a tener ligeramente mejores calificaciones medianas en comparación con quienes no las recibieron.
+
+    En el caso de apoyo escolar extra los estudiantes que lo recibieron suelen tener menores calificaciones en ambas materias. Esto probablemente se debe a que este tipo de apoyo se ofrece a estudiantes que ya están en riesgo académico, por lo que no causa bajo rendimiento, sino que lo acompaña.
+
+    En cuanto a apoyo familiar se refiere, la diferencia entre quienes recibieron y no recibieron es menos clara, aunque en algunos casos se observa una leve mejora en la mediana de notas. Esto puede indicar que el apoyo familiar no siempre se traduce directamente en mejores notas, pero podría influir de manera más indirecta (motivación, hábitos, disciplina).
+
+    \newpage
+
+## Modelo predictivo
+
+Ya habiendo explorado la composición demográfica y el impacto de diversos factores en el rendimiento académico, nuestro siguinete enfasis es dar una respuesta a la tercera pregunta de este estudio: "¿Es posible predecir el rendimiento académico final de los estudiantes (o su aprobación) basándose en sus características demográficas, socioeconómicas y su desempeño inicial?"
+
+Para responderla, construiremos y evaluaremos modelos de clasificación predictivos. Comenzaremos viendo el potencial de los Árboles de Decisión. Este tipo de modelo nos parece el adecuado para la primera aproximación, ya que muestran con claridad como el modelo toma sus decisiones. Nos ayudará a identificar que variables son las más influyentes en los diferentes niveles de calificación y luego analizaremos en una calificación binaria donde solo se cuenta si el alumno aprobó o desaprobó.
+
+Posteriormente, buscaremos una solución con mayor certeza y confiabilidad utilizando Random Forest. Este modelo supera un único árbol de decisión porque combina multiples árboles para mejorar la precisión y reducir el posible sobreajuste. Entonces obtendremos predicciones mas fiables y generalizables. Nos centraremos en la clasificación binaria de aprobación, analizando la capacidad predictiva de los modelos para estimar los aprobados y desaprobados.
+
+Primero, evaluaremos su rendimiento utilizando el conjunto completo de variables demográficas y de estilo de vida, sacando de las variables a G1,G2 para que este modelo pueda ser usado antes de la primera evaluación. Eventualmente, incorporaremos la calificación del primer período (G1) como un factor clave adicional. Esta inclusión es clave ya que G1 aportará información crucial para estimar la aprobación final de los alumnos. Lo que buscamos con esta implementacion es permitir al colegio implementar el modelo justo después de la primera prueba (G1), dandoles la capacidad de tomar precauciones tempranas y estrategias dirigidas para reducir al minimo la cantidad de alumnos desaprobados al final del curso.
+
+El objetivo principal de esta sección es generar el mejor modelo predictivo posible que permita prever el el mal rendimiento academico y que tambien ayude a la institución a identificar qué factores influyen mas en la desaprobación de los estudiantes. Esto les ayudará en la implementación de estrategias tempranas de apoyo para los nuevos estudiantes que presenten características de riesgo de mal rendimiento academico.
+
+Para evaluar el rendimiento de nuestros modelos de clasificación , seleccionamos un conjunto de métricas que nos den una visión de la capacidad predictiva. Estas métricas tambien nos muestra como el modelo maneja los diferentes tipos de errores.
+
+Las métricas elegidas para la evaluación son:
+
+-   **Accuracy (Precisión o Exactitud)**: Proporción de predicciones correctas sobre el total. Muestra la exactitud general del modelo.
+-   **Precision (Precisión):** nos dice de todas las veces que el modelo dijo que algo era X forma ¿cuántas veces realmente lo fue?
+-   **Recall (Sensibilidad ):** nos dice todos los elementos que realmente eran X¿cuántos pudo encontrar el modelo?
+-   **F-measure (Puntuación F1**): Combina Precision y Recall. Dando equilibrio.
+
+### Árbol de Decisión
+
+Construiremos un árbol para estimar las calificaciones de Matemáticas y otro para las de Portugués:
+
+```{r}
+# clasificacion de la calificación final de Matemática
+student_mat_cal <- student_mat %>%
+  mutate(
+    calificacion_final_mat = case_when(
+      G3 >= 16 ~ "Excelente",
+      G3 >= 14 & G3 <= 15 ~ "Bueno",
+      G3 >= 12 & G3 <= 13 ~ "Satisfactorio",
+      G3 >= 10 & G3 <= 11 ~ "Suficiente",
+      G3 >= 0 & G3 <= 9 ~ "Insuficiente"
+    )
+  ) %>%
+  # orden para las categorias de calificación
+  mutate(
+    calificacion_final_mat = factor(
+      calificacion_final_mat,
+      levels = c("Insuficiente", "Suficiente", "Satisfactorio", "Bueno", "Excelente")
+    )
+  ) %>%
+  # orden de las coluumnas
+  relocate(calificacion_final_mat, .after = G3)
+
+# columnas de tipo carácter a factor
+student_mat_cal <- student_mat_cal %>%
+  mutate(across(where(is.character), as.factor))
+
+# dataset excluyendo  G1 G2 y G3
+student_mat_cal_nog3 <- student_mat_cal |>
+  select(-G3, -G2, -G1)
+
+```
+
+```{r}
+set.seed(1234)
+library(tidyverse)
+library(tidymodels)
+library(kernlab)
+library(rpart.plot)
+library(vip)
+
+# division de los datos en conjuntos de entrenamiento y prueba
+split <- initial_split(student_mat_cal_nog3, prop = 0.8, strata = calificacion_final_mat)
+train_data <- training(split)
+test_data <- testing(split)
+
+# especificacion del modelo de árbol de decisión
+modelo_arbol <- decision_tree() |>
+  set_mode("classification") |>
+  set_engine("rpart")
+
+# Entrenamiento con los datos de entrenamiento
+fit_arbol <- fit(modelo_arbol, calificacion_final_mat ~ ., data = train_data)
+
+# visualizacion del árbol
+rpart.plot(fit_arbol$fit,
+           type = 2,
+           extra = 104,
+           fallen.leaves = TRUE,
+           cex = 0.6,
+           main = "Árbol de Clasificación de Calificación Final en Matemáticas",
+           roundint = FALSE,
+           digits = 2)
+
+# importancia de las variables del modelo
+importancia_variables_mat <- fit_arbol$fit$variable.importance
+print(importancia_variables_mat)
+
+# predicciones del modelo para el conjunto de prueba
+pred_arbol_test <- predict(fit_arbol, new_data = test_data, type = "class") %>%
+  bind_cols(test_data) # junte de predicciones con datos originales del conjunto de prueba
+
+# predicciones del modelo para el conjunto de entrenamiento
+pred_arbol_train <- predict(fit_arbol, new_data = train_data, type = "class") %>%
+  bind_cols(train_data) #junte de predicciones con datos originales del conjunto de entrenamiento
+
+# métricas de rendimiento para el conjunto de prueba
+metricas_test <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_arbol_test,
+  truth = calificacion_final_mat,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Test") 
+
+# métricas de rendimiento para el conjunto de entrenamiento
+metricas_train <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_arbol_train,
+  truth = calificacion_final_mat,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Train") 
+
+# métricas de entrenamiento y prueba
+metricas_combinadas <- bind_rows(metricas_train, metricas_test) %>%
+  select(set, everything()) %>%
+  arrange(.metric, set)
+
+# tabla de métricas combinadas
+print(metricas_combinadas)
+```
+
+Para este primer modelo de Árbol de Decisión sobre las calificaciones de Excelente hasta Insuficiente en Matemáticas, observamos que el número de reprobaciones previas (failures) es, con diferencia, el factor más determinante y que mas utiliza el modelo. Le sigue de cerca la cantidad de ausencias (absences), ambas variables revelan un impacto significativo en el calificación final.
+
+Viendo las métricas de este primer árbol de decisión de las calificaciones en Matemática, notamos que el modelo tiene un rendimiento muy deficiente. Con accuracy igual 0,2625 en el conjunto de prueba y las otras métricas Precision, Recall y F-measure menores a 0,25, el modelo no logra predecir correctamente las categorías de calificación.
+
+Además, se ve una diferencia entreel rendimiento en el conjunto de entrenamiento y el rendimeinto en la prueba, siendo un sobreajuste, indicando que no es capaz de generalizar a nuevos datos fuera de los de entrenamiento.
+
+```{r}
+student_port_cal <- student_por %>%
+  mutate(
+    calificacion_final_por = case_when(
+      G3 >= 16 ~ "Excelente",
+      G3 >= 14 & G3 <= 15 ~ "Bueno",
+      G3 >= 12 & G3 <= 13 ~ "Satisfactorio",
+      G3 >= 10 & G3 <= 11 ~ "Suficiente",
+      G3 >= 0 & G3 <= 9 ~ "Insuficiente")) %>%
+  mutate(calificacion_final_por = factor(
+      calificacion_final_por,
+      levels = c("Insuficiente", "Suficiente", "Satisfactorio", "Bueno", "Excelente"))) %>%
+  relocate(calificacion_final_por, .after = G3)
+
+student_port_cal <- student_port_cal %>%
+  mutate(across(where(is.character), as.factor))
+
+student_port_cal_nog3 <- student_port_cal  |>
+  select(-G3,-G2,-G1)
+```
+
+```{r}
+set.seed(1234)
+
+library(tidymodels)
+library(rpart)
+library(rpart.plot)# carga la libreria tidymodels
+
+# division de los datos en conjuntos de entrenamiento y prueba
+split <- initial_split(student_port_cal_nog3, prop = 0.8, strata = calificacion_final_por)
+train_data <- training(split)
+test_data <- testing(split)
+
+# especificacion del modelo de árbol de decisión
+modelo_arbol <- decision_tree() |>
+  set_mode("classification") |>
+  set_engine("rpart")
+
+# Entrenamiento con los datos de entrenamiento
+fit_arbol <- fit(modelo_arbol, calificacion_final_por ~ ., data = train_data)
+
+# visualizacion del árbol
+rpart.plot(fit_arbol$fit,
+           type = 2,
+           extra = 104,
+           fallen.leaves = TRUE,
+           cex = 0.6,
+           main = "Árbol de Clasificación de Calificación Final en Portugués",
+           roundint = FALSE,
+           digits = 2)
+
+# importancia de las variables del modelo
+importancia_variables_port <- fit_arbol$fit$variable.importance
+print(importancia_variables_port)
+
+# predicciones del modelo para el conjunto de prueba
+pred_arbol_test <- predict(fit_arbol, new_data = test_data, type = "class") %>%
+  bind_cols(test_data) # junte de predicciones con datos originales del conjunto de prueba
+
+# predicciones del modelo para el conjunto de entrenamiento
+pred_arbol_train <- predict(fit_arbol, new_data = train_data, type = "class") %>%
+  bind_cols(train_data) # junte de predicciones con datos originales del conjunto de entrenamiento
+
+# métricas de rendimiento para el conjunto de prueba
+metricas_test <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_arbol_test,
+  truth = calificacion_final_por,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Test")
+
+# métricas de rendimiento para el conjunto de entrenamiento
+metricas_train <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_arbol_train,
+  truth = calificacion_final_por,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Train")
+
+# métricas de entrenamiento y prueba
+metricas_combinadas <- bind_rows(metricas_train, metricas_test) %>%
+  select(set, everything()) %>%
+  arrange(.metric, set)
+
+# tabla de métricas combinadas
+print(metricas_combinadas)
+
+```
+
+Para el modelo de arbol de decisión sobre las calificaciones de Excelente hasta Insuficiente en Portugués, vemos que al igual que en Matemáticas el número de reprobaciones previas (failures) es el factor mas determinante y que mas utiliza el modelo.
+
+En las métricas vemos que el modelo tiene, al igual que el de Matemáticas, un rendimiento muy deficiente. Con una accuracy igual a 0,3182 en el conjunto de prueba y las otras métricas ( Precision, Recall y F-measure) tambien siendo bajas, alrededor de 0,30, el modelo no logra predecir correctamente las categorías de calificación.
+
+Se mantiene una diferencia entre el rendimiento en el conjunto de entrenamiento y el rendimiento en la prueba. Esto confirma un sobreajuste, indicando que el modelo no es capaz de generalizar a nuevos datos fuera de los de entrenamiento.
+
+### Árboles de Decisión Binario
+
+Viendo el rendimiento deficiente de estos modelos iniciales para estimar las calificaciones, nos detenemos a analizar cual puede ser problema. Concluimos que la escala de calificación, donde las categorias cambian cada dos puntos (por ejemplo 10-11 es Suficiente, 12-13 es Satisfactorio), genera una complejidad demasiado alta para que el modelo pueda estimar con precisión la calificación especifica del alumno.
+
+Entonces simplificaremos la variable objetivo. Haremos una nueva variable binaria que indica si el estudiante aprobó o desaprobó la materia. Con esto, nuestro plan es rehacer los mismos análisis con los árboles de decisión, pero ahora con el objetivo de predecir únicamente si aprobó o no. Tenemos la esperanza de que al reducir la complejidad de la tarea el modelo logre mejorar la predicción y ofrezca resultados más útiles.
+
+```{r}
+student_mat_binaria <- student_mat %>%
+  mutate(
+    # "Aprobado" o "Desaprobado"
+    aprobacion_mat = case_when(
+      G3 >= 10 ~ "Aprobado",
+      G3 < 10 ~ "Desaprobado"
+    ),
+    # factor con un orden
+    aprobacion_mat = factor(
+      aprobacion_mat,
+      levels = c("Desaprobado", "Aprobado") # El orden nos va a servir para algunas metricas como Sensibilidad/Recall
+    ) ) %>%
+  # Convertir todas las columnas de tipo 'character' a 'factor'
+  mutate(across(where(is.character), as.factor)) %>%
+  # sacamos calificaciones G1, G2, G3 si no quieres que sean predictores
+  select(-G3, -G2, -G1) # Eliminamos las notas numéricas G1, G2, G3
+```
+
+```{r}
+set.seed(1234)
+
+
+# division de los datos en conjuntos de entrenamiento y prueba
+split_binario <- initial_split(student_mat_binaria, prop = 0.8, strata = aprobacion_mat)
+train_data_binario <- training(split_binario)
+test_data_binario <- testing(split_binario)
+
+# especificacion del modelo de árbol de decisión
+modelo_arbol_binario <- decision_tree() |>
+  set_mode("classification") |>
+  set_engine("rpart")
+
+# Entrenamiento con los datos de entrenamiento
+fit_arbol_binario <- fit(modelo_arbol_binario, aprobacion_mat ~ ., data = train_data_binario)
+
+# visualizacion del árbol
+rpart.plot(fit_arbol_binario$fit,
+           type = 2,
+           extra = 104,
+           fallen.leaves = TRUE,
+           cex = 0.6,
+           main = "Árbol de Clasificación: Aprobado/Desaprobado en Matemáticas",
+           roundint = FALSE,
+           digits = 2)
+
+# importancia de las variables del modelo
+importancia_variables_binario <- fit_arbol_binario$fit$variable.importance
+print("--- Importancia de las Variables en el Árbol Binario ---")
+print(importancia_variables_binario)
+
+# predicciones del modelo para el conjunto de prueba
+pred_arbol_test_binario <- predict(fit_arbol_binario, new_data = test_data_binario, type = "class") %>%
+  bind_cols(test_data_binario) # junte de predicciones con datos originales del conjunto de prueba
+
+# predicciones del modelo para el conjunto de entrenamiento
+pred_arbol_train_binario <- predict(fit_arbol_binario, new_data = train_data_binario, type = "class") %>%
+  bind_cols(train_data_binario) # junte de predicciones con datos originales del conjunto de entrenamiento
+
+# métricas de rendimiento para el conjunto de prueba
+metricas_test_binario <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_arbol_test_binario,
+  truth = aprobacion_mat,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Test")
+
+# métricas de rendimiento para el conjunto de entrenamiento
+metricas_train_binario <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_arbol_train_binario,
+  truth = aprobacion_mat,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Train")
+
+# métricas de entrenamiento y prueba
+metricas_combinadas_binario <- bind_rows(metricas_train_binario, metricas_test_binario) %>%
+  select(set, everything()) %>%
+  arrange(.metric, set)
+
+# tabla de métricas combinadas
+print(metricas_combinadas_binario)
+```
+
+Para este modelo de Árbol de Decisión enfocado en aprobación o desaprobación en Matemática, las variables más influyentes siguen siendo cruciales. Al igual que en el modelo anterior, el número de reprobaciones previas (failures) es el factor más determinante, ya pudiendo confirmar que es el factor mas importante con el cual contamos. Sin embargo, en esta clasificación binaria, la frecuencia con la que el estudiante sale con amigos (goout) es un factor de gran importancia, seguido de cerca por la cantidad de ausencias (absences) y el consumo de alcohol entre semana (Walc). Diciendo que las actividades sociales tienen un peso considerable en la aprobación del curso.
+
+Viendo las métricas de este árbol de decisión para la aprobación binaria en Matemáticas, notamos una mejora en el rendimiento en comparación con el modelo anterior. La accuracy en el conjunto de prueba sube a 0,6203. Las métricas de Precision, Recall y F-measure también muestran una mejora notable, indicando que el modelo predice de mejor manera la condición de aprobación o desaprobación.
+
+Sigue existiendo una diferencia entre el rendimiento en el conjunto de entrenamiento y el rendimiento en la prueba. Esto sugiere la presencia de sobreajuste.
+
+```{r}
+student_por_binaria <- student_por %>% 
+  mutate(aprobacion_por = case_when( 
+      G3 >= 10 ~ "Aprobado",
+      G3 < 10 ~ "Desaprobado"),
+   
+    aprobacion_por = factor(
+      aprobacion_por,
+      levels = c("Desaprobado", "Aprobado") )) %>%
+  
+  mutate(across(where(is.character), as.factor)) %>%
+  select(-G3, -G2, -G1)
+```
+
+```{r}
+set.seed(1234)
+
+# division de los datos en conjuntos de entrenamiento y prueba
+split_por_binario <- initial_split(student_por_binaria, prop = 0.8, strata = aprobacion_por)
+train_data_por_binario <- training(split_por_binario)
+test_data_por_binario <- testing(split_por_binario)
+
+# especificacion del modelo de árbol de decisión
+modelo_arbol_por_binario <- decision_tree() |>
+  set_mode("classification") |>
+  set_engine("rpart") |>
+  set_args(cost_complexity = 0.001)
+
+# Entrenamiento con los datos de entrenamiento
+fit_arbol_por_binario <- fit(modelo_arbol_por_binario, aprobacion_por ~ ., data = train_data_por_binario)
+
+# visualizacion del árbol
+rpart.plot(fit_arbol_por_binario$fit,
+           type = 2,
+           extra = 104,
+           fallen.leaves = TRUE,
+           cex = 0.6,
+           main = "Árbol de Clasificación: Aprobado/Desaprobado en Portugués",
+           roundint = FALSE,
+           digits = 2)
+
+# importancia de las variables del modelo
+importancia_variables_por_binario <- fit_arbol_por_binario$fit$variable.importance
+print(importancia_variables_por_binario)
+
+# predicciones del modelo para el conjunto de prueba
+pred_arbol_test_por_binario <- predict(fit_arbol_por_binario, new_data = test_data_por_binario, type = "class") %>%
+  bind_cols(test_data_por_binario) # junte de predicciones con datos originales del conjunto de prueba
+
+# predicciones del modelo para el conjunto de entrenamiento
+pred_arbol_train_por_binario <- predict(fit_arbol_por_binario, new_data = train_data_por_binario, type = "class") %>%
+  bind_cols(train_data_por_binario) # junte de predicciones con datos originales del conjunto de entrenamiento
+
+# métricas de rendimiento para el conjunto de prueba
+metricas_test_por_binario <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_arbol_test_por_binario,
+  truth = aprobacion_por,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Test")
+
+# métricas de rendimiento para el conjunto de entrenamiento
+metricas_train_por_binario <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_arbol_train_por_binario,
+  truth = aprobacion_por,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Train")
+
+# métricas de entrenamiento y prueba
+metricas_combinadas_por_binario <- bind_rows(metricas_train_por_binario, metricas_test_por_binario) %>%
+  select(set, everything()) %>%
+  arrange(.metric, set)
+
+# tabla de métricas combinadas
+print(metricas_combinadas_por_binario)
+
+```
+
+Para este modelo de Árbol de Decisión de aprobación o desaprobación en Portugués una vez más, el número de reprobaciones previas (failures) es el factor más determinante. Despues de este, la aspiración a una educación superior (higher) se posiciona como la siguientes variables más influyentes, indicando que las metas académicas pueden tener un peso en el éxito o fracaso en esta materia.
+
+Al analizar las métricas de este árbol de decisión para la aprobación binaria en Portugués, notamos una mejora excepcional en el rendimiento general, superando incluso al modelo binario de Matemáticas. La accuracy en el conjunto de prueba (Test) es notablemente alta, alcanzando 0.8308. Esto significa que el modelo es muy eficaz a la hora de predecir correctamente la aprobación o desaprobación de los estudiantes en Portugués.
+
+Si bien hay una diferencia entre el rendimiento en el conjunto de entrenamiento y el de prueba, lo que nos dice que hay sobreajuste, se mantiene bastante igualmente siendo mas útil para predecir la aprobación en Portugués que el árbol de decisión anterior. Aunque las métricas específicas para los desaprobados (Precision, Recall y F-measure) muestran un sector donde mejorar, el modelo es prometedor para su aplicación en el contexto que queremos.
+
+### Random Forest
+
+Habiendo explorado los Árboles de Decisión y confirmado la mejor respuesta de la calificación separa por Aprobado y Desaprobado, avanzaremos a un modelo mas potente : Random Forest. Este enfoque al combinar múltiples árboles nos dará resultados mejores. Desde ahora basándonos en la evidencia de que el modelo estima con mucha mayor eficacia, nos centraremos solamente en la clasificación binaria de Aprobado y Desaprobado para todas nuestros Random Forest.
+
+```{r}
+set.seed(1234)
+
+# division de los datos en conjuntos de entrenamiento y prueba
+split_binario <- initial_split(student_mat_binaria, prop = 0.8, strata = aprobacion_mat)
+train_data_binario <- training(split_binario)
+test_data_binario <- testing(split_binario)
+
+# especificacion del modelo Random Forest
+modelo_rf_binario <- rand_forest(trees = 1000) |>
+  set_engine('ranger', importance = 'impurity') |>
+  set_mode('classification')
+
+# Entrenamiento con los datos de entrenamiento
+fit_rf_binario <- fit(modelo_rf_binario, aprobacion_mat ~ ., data = train_data_binario)
+
+# importancia de las variables del modelo
+importancia_variables_rf_binario <- vip(fit_rf_binario$fit)
+print(importancia_variables_rf_binario)
+
+# predicciones del modelo para el conjunto de prueba
+pred_rf_test_binario <- predict(fit_rf_binario, new_data = test_data_binario, type = "class") %>%
+  bind_cols(test_data_binario %>% select(aprobacion_mat)) # junte de predicciones con la variable objetivo
+
+# predicciones del modelo para el conjunto de entrenamiento
+pred_rf_train_binario <- predict(fit_rf_binario, new_data = train_data_binario, type = "class") %>%
+  bind_cols(train_data_binario %>% select(aprobacion_mat)) # junte de predicciones con la variable objetivo
+
+# métricas de rendimiento para el conjunto de prueba
+metricas_test_rf_binario <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_rf_test_binario,
+  truth = aprobacion_mat,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Test")
+
+# métricas de rendimiento para el conjunto de entrenamiento
+metricas_train_rf_binario <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_rf_train_binario,
+  truth = aprobacion_mat,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Train")
+
+# métricas de entrenamiento y prueba
+metricas_combinadas_rf_binario <- bind_rows(metricas_train_rf_binario, metricas_test_rf_binario) %>%
+  select(set, everything()) %>%
+  arrange(.metric, set)
+
+# tabla de métricas combinadas
+print(metricas_combinadas_rf_binario)
+
+```
+
+Para el modelo Random Forest de clasificación Aprobación y Desaprobación en Matemática, observamos que failures ( reprobaciones previas), goout ( salidas con amigos) y absences (ausencias) son las variables con un gran impacto en la predicción de la aprobación o desaprobación de los estudiantes. Igualmente el modelo utiliza muchas otras variables con un buen impacto también, aunque estas 3 son las más influyentes.
+
+Observamos una leve mejora en la accuracy en el conjunto de prueba (0,6709), las otras métricas muestra un sobreajuste muy grande. Hay una diferencia gigante en la Precision ( pasa de 1 en entrenamiento a 0,50 en prueba) y en el F-measure (cae de 0,9278 a 0,2778). Esto indica que aun viendo una mejora general, el modelo tiene gran dificultad para identificar de forma fiable a los estudiantes que realmente van a desaprobar en los datos no vistos, bajando su utilidad predictiva para alumnos en riesgo de desapruebo.
+
+```{r}
+set.seed(1234)
+
+# division de los datos en conjuntos de entrenamiento y prueba
+split_por_binario <- initial_split(student_por_binaria, prop = 0.8, strata = aprobacion_por)
+train_data_por_binario <- training(split_por_binario)
+test_data_por_binario <- testing(split_por_binario)
+
+# especificacion del modelo Random Forest
+modelo_rf_por_binario <- rand_forest(trees = 1000) |>
+  set_engine('ranger', importance = 'impurity') |>
+  set_mode('classification')
+
+# Entrenamiento con los datos de entrenamiento
+fit_rf_por_binario <- fit(modelo_rf_por_binario, aprobacion_por ~ ., data = train_data_por_binario)
+
+# importancia de las variables del modelo
+importancia_variables_rf_por_binario <- vip(fit_rf_por_binario$fit)
+print(importancia_variables_rf_por_binario)
+
+# predicciones del modelo para el conjunto de prueba
+pred_rf_test_por_binario <- predict(fit_rf_por_binario, new_data = test_data_por_binario, type = "class") %>%
+  bind_cols(test_data_por_binario %>% select(aprobacion_por)) # junte de predicciones con la variable objetivo
+
+# predicciones del modelo para el conjunto de entrenamiento
+pred_rf_train_por_binario <- predict(fit_rf_por_binario, new_data = train_data_por_binario, type = "class") %>%
+  bind_cols(train_data_por_binario %>% select(aprobacion_por)) # junte de predicciones con la variable objetivo
+
+# métricas de rendimiento para el conjunto de prueba
+metricas_test_rf_por_binario <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_rf_test_por_binario,
+  truth = aprobacion_por,
+  estimate = .pred_class) %>%
+  mutate(set = "Test")
+
+# métricas de rendimiento para el conjunto de entrenamiento
+metricas_train_rf_por_binario <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_rf_train_por_binario,
+  truth = aprobacion_por,
+  estimate = .pred_class) %>% 
+  mutate(set = "Train")
+
+# métricas de entrenamiento y prueba 
+metricas_combinadas_rf_por_binario <- bind_rows(metricas_train_rf_por_binario, metricas_test_rf_por_binario) %>%
+  select(set, everything()) %>% 
+  arrange(.metric, set)
+
+# tabla de métricas combinadas 
+print(metricas_combinadas_rf_por_binario)
+```
+
+Para el modelo Random Forest de clasificación Aprobación y Desaprobación en Portugués, observamos que failures (reprobaciones previas) y higher (aspiración a educación superior) son las variables con mayor impacto en la predicción de la aprobación o desaprobación de los estudiantes. Igualmente el modelo utiliza muchas otras variables con un buen impacto.
+
+Vemos una mejora en la accuracy en el conjunto de prueba (ahora es de 0,8538), pero las otras métricas muestran un sobreajuste grande. Hay una diferencia grandepero algo menor en la Precision (pasa de 1 en entrenamiento a 0.6667 en prueba) y en el F-measure (que cae mucho de 0,8321 a 0,1739). A pesar de ver una mejora general en la accuracy, el modelo tiene una dificultad extrema para identificar de forma correcta los estudiantes que realmente van a desaprobar en los datos no vistos, lo que reduce su utilidad predictiva para alumnos en riesgo de desaprobación.
+
+### Random Forest con G1
+
+Viendo que los problemas continuan con el sobreajuste y las bajas métricas especicas para los Desaprobados en los modelos de Random Forest, decidimos modificar los datos. A partir de ahora, sumaremos la calificación del primer período (G1) en nuestros conjuntos de variables. Creemos que esta inclusión es fundamental, ya que G1 aporta una cantidad significativa de información sobre el desempeño inicial del estudiante que el modelo puede aprovechar. Además, este enfoque sigue siendo muy útil para la institución, ya que el modelo puede ser utilizado inmediatamente después de la primera evaluación. Con esta modificación, esperamos que el modelo alcance la fiabilidad necesaria para cumplir con nuestro propósito principal: ver la cantidad de alumnos que desaprobarían y compararlo con la realidad luego de hacer apoyos preventivos.
+
+```{r}
+set.seed(1234)
+
+# creacion de variable objetivo binaria y su orden
+student_mat_cal_bin_solog1 <- student_mat %>%
+  mutate(
+    aprobacion_mat = case_when(
+      G3 >= 10 ~ "Aprobado",
+      G3 < 10 ~ "Desaprobado" ),
+    aprobacion_mat = factor(
+      aprobacion_mat,
+      levels = c("Desaprobado", "Aprobado"))) %>%
+  # conversion de caracteres a factores
+  mutate(across(where(is.character), as.factor)) %>%
+  # seleccion de variables relevantes (excluyendo G2, G3)
+  select(-G3, -G2)
+
+# division de los datos en conjuntos de entrenamiento y prueba
+set.seed(1234)
+split_bin_solog1 <- initial_split(student_mat_cal_bin_solog1, prop = 0.8, strata = aprobacion_mat)
+train_data_bin_solog1 <- training(split_bin_solog1)
+test_data_bin_solog1 <- testing(split_bin_solog1)
+
+# especificacion del modelo Random Forest
+modelo_rf_bin_solog1 <- rand_forest(trees = 1000) |>
+  set_engine('ranger', importance = 'impurity', seed = 1234) |>
+  set_mode('classification')
+
+# Entrenamiento con los datos de entrenamiento
+fit_rf_bin_solog1 <- fit(modelo_rf_bin_solog1, aprobacion_mat ~ ., data = train_data_bin_solog1)
+
+# importancia de las variables del modelo
+importancia_variables_rf_bin_solog1 <- vip(fit_rf_bin_solog1$fit)
+print(importancia_variables_rf_bin_solog1)
+
+# predicciones del modelo para el conjunto de prueba
+pred_rf_test_bin_solog1 <- predict(fit_rf_bin_solog1, new_data = test_data_bin_solog1, type = "class") %>%
+  bind_cols(test_data_bin_solog1 %>% select(aprobacion_mat)) # junte de predicciones con la variable objetivo
+
+# predicciones del modelo para el conjunto de entrenamiento
+pred_rf_train_bin_solog1 <- predict(fit_rf_bin_solog1, new_data = train_data_bin_solog1, type = "class") %>%
+  bind_cols(train_data_bin_solog1 %>% select(aprobacion_mat)) # junte de predicciones con la variable objetivo
+
+# métricas de rendimiento para el conjunto de prueba
+metricas_test_rf_bin_solog1 <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_rf_test_bin_solog1,
+  truth = aprobacion_mat,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Test")
+
+# métricas de rendimiento para el conjunto de entrenamiento
+metricas_train_rf_bin_solog1 <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_rf_train_bin_solog1,
+  truth = aprobacion_mat,
+  estimate = .pred_class
+) %>%
+  mutate(set = "Train")
+
+# métricas de entrenamiento y prueba
+metricas_combinadas_rf_bin_solog1 <- bind_rows(metricas_train_rf_bin_solog1, metricas_test_rf_bin_solog1) %>%
+  select(set, everything()) %>%
+  arrange(.metric, set)
+
+# tabla de métricas combinadas
+print(metricas_combinadas_rf_bin_solog1)
+```
+
+Al incorporar G1 en el modelo Random Forest para la clasificación de aprobación y desaprobación en Matemática, observamos mejoras significativas, especialmente en la Precision (0,7391), Recall (0,6538) y F-measure (0,6939) en el conjunto de prueba. Esto indica que el modelo es ahora mucho más fiable para identificar a los estudiantes en riesgo de desaprobación. La importancia gigante que toma G1 en el modelo es lógica, ya que es el rendimiento inicial del alumno y fue la clave para esta mejora, a pesar de que aún existe algo de sobreajuste.
+
+```{r}
+# creacion de la matriz de confusion
+conf_matrix_rf_bin_solog1 <- conf_mat(pred_rf_test_bin_solog1, truth = aprobacion_mat, estimate = .pred_class)
+autoplot(conf_matrix_rf_bin_solog1, type = "heatmap") +
+  labs(title = "Matriz de Confusión para Random Forest (Matemáticas Binario - Solo G1)") +
+  scale_fill_gradient(low = "white", high = "darkgreen")
+```
+
+Al analizar la matriz de confusión de este modelo Random Forest para Matemática con G1 incluido, observamos que predice bastante bien a los estudiantes que aprueban, pero la dificultad sigue siendo la correcta identificación de los desaprobados. De los 53 estudiantes que realmente aprobaron, el modelo logró identificar correctamente a 47. Sin embargo, en el caso de los que realmente desaprobaron, que fueron 26, el modelo acertó en 17 de ellos. El error más importante para nosotros es que el modelo predijo que 9 estudiantes aprobarían, cuando en realidad no lo hicieron, lo que representa un fallo importante en la detección temprana de alumnos en riesgo de desaprobación.
+
+```{r}
+# creacion de variable objetivo binaria y su orden
+student_por_cal_bin_solog1 <- student_por %>%
+  mutate(
+    aprobacion_por = case_when(
+      G3 >= 10 ~ "Aprobado",
+      G3 < 10 ~ "Desaprobado"),
+    aprobacion_por = factor(
+      aprobacion_por,
+      levels = c("Desaprobado", "Aprobado")
+    )
+  ) %>%
+  # conversion de caracteres a factores
+  mutate(across(where(is.character), as.factor)) %>%
+  # seleccion de variables relevantes (excluyendo G2, G3)
+  select(-G3, -G2)
+
+# division de los datos en conjuntos de entrenamiento y prueba
+set.seed(1234)
+split_por_bin_solog1 <- initial_split(student_por_cal_bin_solog1, prop = 0.8, strata = aprobacion_por)
+train_data_por_bin_solog1 <- training(split_por_bin_solog1)
+test_data_por_bin_solog1 <- testing(split_por_bin_solog1)
+
+# especificacion del modelo Random Forest
+set.seed(1234)
+modelo_rf_por_bin_solog1 <- rand_forest(trees = 1000) |>
+  set_engine('ranger', importance = 'impurity', seed = 1234) |>
+  set_mode('classification')
+
+# Entrenamiento con los datos de entrenamiento
+fit_rf_por_bin_solog1 <- fit(modelo_rf_por_bin_solog1, aprobacion_por ~ ., data = train_data_por_bin_solog1)
+
+# importancia de las variables del modelo
+importancia_variables_rf_por_bin_solog1 <- vip(fit_rf_por_bin_solog1$fit)
+print(importancia_variables_rf_por_bin_solog1)
+
+# predicciones del modelo para el conjunto de prueba
+pred_rf_test_por_bin_solog1 <- predict(fit_rf_por_bin_solog1, new_data = test_data_por_bin_solog1, type = "class") %>%
+  bind_cols(test_data_por_bin_solog1 %>% select(aprobacion_por)) # junte de predicciones con la variable objetivo
+
+# predicciones del modelo para el conjunto de entrenamiento
+pred_rf_train_por_bin_solog1 <- predict(fit_rf_por_bin_solog1, new_data = train_data_por_bin_solog1, type = "class") %>%
+  bind_cols(train_data_por_bin_solog1 %>% select(aprobacion_por)) # junte de predicciones con la variable objetivo
+
+# métricas de rendimiento para el conjunto de  prueba
+metricas_test_rf_por_bin_solog1 <- metric_set(accuracy, precision, recall, f_meas)(
+  pred_rf_test_por_bin_solog1,
+  truth = aprobacion_por,
+  estimate = .pred_class) %>%
+  mutate(set = "Test")
+
+# métricas de rendimiento para el conjunto de entrenamiento
+metricas_train_rf_por_bin_solog1 <- metric_set(accuracy, precision, recall, f_meas)(pred_rf_train_por_bin_solog1,
+  truth = aprobacion_por,
+  estimate = .pred_class) %>%
+  mutate(set = "Train")
+
+# métricas de entrenamiento y prueba          
+metricas_combinadas_rf_por_bin_solog1 <- bind_rows(metricas_train_rf_por_bin_solog1, metricas_test_rf_por_bin_solog1) %>%
+  select(set, everything()) %>%
+  arrange(.metric, set) 
+
+# tabla de métricas combinadas 
+print(metricas_combinadas_rf_por_bin_solog1)   
+
+```
+
+Para el modelo Random Forest de calificación Aprobación y Desaprobación en Portugués, ahora con G1, observamos una mejora en el rendimiento general en comparación con la versión sin G1. La accuracy en el conjunto de prueba se mantiene alta, alcanzando 0,8692. Lo más importante es el aumento en la capacidad de detectar a los estudiantes en riesgo de desaprobación: el F-measure en prueba asciende a 0,4516 y el Recall a 0,3500, cifras mejores a las obtenidas sin G1. La inclusión de G1 otorga una importancia muy grande al modelo para realizar estas estimaciones, siendo un factor crucial para predecir el resultado final del estudiante.
+
+```{r}
+# creacion de la matriz de confusion
+conf_matrix_rf_por_bin_solog1 <- conf_mat(pred_rf_test_por_bin_solog1, truth = aprobacion_por, estimate = .pred_class)
+print(conf_matrix_rf_por_bin_solog1)
+autoplot(conf_matrix_rf_por_bin_solog1, type = "heatmap") +
+  labs(title = "Matriz de Confusión para Random Forest (Portugués Binario - Solo G1)")+
+  scale_fill_gradient(low = "white", high = "darkgreen")
+```
+
+Al analizar la matriz de confusión de este modelo Random Forest para Portugués con G1, confirmamos que el modelo es extremadamente bueno estimando a los estudiantes que aprueban: de los 110 estudiantes que realmente aprobaron, el modelo estimó correctamente a 106. Sin embargo, el problema gigante y crítico se presenta con los estudiantes que realmente desaprobaron: de los 20 alumnos que no aprobaron, nuestro modelo predice que 13 de ellos sí aprobarán, lo que representa un error muy significativo.
+
+En conclusión, nuestro análisis de modelos Random Forest, especialmente con la inclusión de la calificación G1, es una herramienta prometedora. Aunque existen desafíos en la detección de todos los estudiantes en riesgo, el modelo demuestra una fiabilidad al estimar la cantidad de estudiantes que si aprobarán. Esta fortaleza nos permite proponer un enfoque distinito para la institución: utilizar el modelo para predecir la cantidad de aprobados inmediatamente después de la primera evaluación. Luego al finalizar el curso se podrá comparar la cantidad real de estudiantes aprobados con la predicción inicial. Si la cifra de aprobados reales supera ampliamente la cantidad estimada al principio, nos dará una clara evidencia de que las medidas de apoyo implementadas tuvieron un impacto positivo y lograron aumentar la tasa de aprobación.
+
+\newpage
+
+## Descripción de la aplicación shiny
+
+El propósito principal de la app es permitir al usuario visualizar y comparar las calificaciones finales de los estudiantes (tanto en Matemáticas como en Portugués), teniendo en cuenta múltiples variables que influyen potencialmente en su desempeño académico, como: edad, escuela, nivel educativo de los padres ocupación de la madre y del padre, zona de residencia, acceso a Internet, apoyo escolar y familiar.
+
+La app está construida con shinydashboard, lo que brinda una interfaz clara, con panel lateral de filtros y una sección principal de visualización. Está compuesta por un panel de filtros que permite segmentar a los estudiantes según variables sociodemográficas, educativas y de contexto, un gráfico de barras que muestra la distribución de notas finales categorizadas (Insuficiente, Suficiente, Satisfactorio, Bueno, Excelente), separadas por escuela y un resumen textual que muestra la cantidad de estudiantes filtrados y el porcentaje en cada categoría. Los filtros son dinamicos, por lo que la visualizacion y el resumen se actualizan automaticamente al seleccionar diferentes combinaciones de variables.
+
+En cuanto al analisis, esta app aporta una herramienta interactiva para detectar patrones en el rendimiento segun caracteristicas familiares y escolares,comparar entre escuelas o grupos con diferentes niveles educativos de padres y explorar el impacto de variables como el acceso a internet, la zona donde se vive, el apoyo escolar, familiar y el trabajo de los padres.
+
+Agregado a esto, facilita la comunicación de resultados y el trabajo exploratorio sin necesidad de conocimientos técnicos en R, ofreciendo una interfaz amigable para docentes, investigadores y responsables educativos.
+
+<https://davidfer.shinyapps.io/shiny/>
+
+\newpage
+
+## Comentarios finales
+
+El comenzó analizando el rendimiento académico de estudiantes portugueses, viendo primero su composición demográfica para entender el contexto de los estudiantes. Luego, se investigó la influencia de numerosos factores, viendo como el nivel educativo y la ocupación de los padres, se relacionan con las calificaciones.
+
+El enfoque más relevante y mas pesado fue el desarrollo de un modelo predictivo. Inicialmente, las predicciones de calificaciones detalladas mostraron dificultades, lo que nos hizo simplificar el objetivo a una clasificación binaria de "Aprobado" o "Desaprobado". Aunque el modelo, especialmente un Random Forest, mostró mejora, predecir la desaprobación siguió siendo un desafío. Por ello, nuestra propuesta central es utilizar el modelo para identificar a los alumnos que se estima que aprobarán y enfocar las medidas de apoyo académico en el resto. Viendo que estas intervenciones se podrían evaluar observando un aumento en la cantidad de aprobados finales en comparacion con las que el modelo estimó, midiendo el impacto del apoyo temprano. Esta adaptación fue clave para encontrar una utilidad práctica.
+
+Finalmente, complementando el análisis, desarrollamos una aplicación Shiny. Al ser interactiva permite explorar visualmente el rendimiento académico y los factores influyentes, facilitando la identificación de perfiles de riesgo de desaprobación y apoyando la toma de decisiones educativas. El proyecto combinó un análisis de la poblacion estudiantil con una propuesta práctica y una herramienta interactiva para optimizar el apoyo estudiantil.
+
+\newpage
+
+## Referencias
+
+**Datos:**
+
+Student Performance Data Set. UCI Machine Learning Repository. Recolectado por Paulo Cortez y Alice Silva en 2008. <https://archive.ics.uci.edu/dataset/320/student+performance>
+
+**Paquetes:**
+
+Therneau, Terry, and Beth Atkinson. 2022. *Rpart: Recursive Partitioning and Regression Trees*. <https://CRAN.R-project.org/package=rpart>.
+
+Therneau, Terry, and Beth Atkinson. 2022. *rpart.plot: Plot ‘rpart’ Models*. <https://CRAN.R-project.org/package=rpart.plot>
+
+Wickham, Hadley. 2023. *Tidyverse: Easily Install and Load the Tidyverse*. <https://CRAN.R-project.org/package=tidyverse>
+
+Chang, Winston, Joe Cheng, JJ Allaire, Yihui Xie, and Jonathan McPherson. 2023. *Shiny: Web Application Framework for R*. <https://CRAN.R-project.org/package=shiny>
+
+Chang, Winston and Barbara Borges. 2023. *shinydashboard: Create Dashboards with ‘Shiny’*. <https://CRAN.R-project.org/package=shinydashboard>
