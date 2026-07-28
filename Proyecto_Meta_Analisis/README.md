@@ -1,104 +1,67 @@
-# Parcial 2 – Simulación de eventos demográficos y proyección de población (USA)
+# Meta-análisis: El Efecto Pigmalión y las expectativas docentes (dataset dat.raudenbush1985)
 
 ## Descripción
-Este proyecto implementa dos componentes principales en Demografía/Modelos poblacionales:
 
-1) **Simulación de trayectorias individuales** para eventos demográficos usando el método de la
-transformada inversa bajo un **riesgo constante por intervalos (piecewise-constant hazard)**.
-Se simulan dos eventos:
-- **Mortalidad (fallecimiento)**: evento universal.
-- **Primer hijo (fecundidad condicional)**: evento no universal (puede no ocurrir).
-
-2) **Proyección de población por sexo y edad** mediante el **método de los componentes**,
-utilizando tasas específicas de fecundidad por edad y tablas de mortalidad por período
-(hombres y mujeres), con comparación final entre pirámide observada vs proyectada.
-
-Caso de estudio: **Estados Unidos**, datos del período con foco en **2015** para la simulación,
-y proyección desde el primer año común disponible hasta el último año con datos (comparación
-final en 2024).
+Este proyecto realiza un meta-análisis sobre el "Efecto Pigmalión" en el ámbito educativo, analizando si las expectativas de los docentes influyen causalmente en el rendimiento intelectual (CI) de los estudiantes. Se utiliza el dataset `dat.raudenbush1985`, el cual reúne la evidencia de diversos estudios experimentales independientes con resultados contradictorios, aplicando técnicas de síntesis cuantitativa para llegar a una conclusión unificada.
 
 ## Objetivos
-- Simular tiempos de ocurrencia de eventos demográficos a partir de tasas por edad usando
-  transformada inversa y riesgo constante por intervalos.
-- Validar la simulación comparando **Kaplan–Meier** vs supervivencia teórica `S(t)=exp(-H(t))`.
-- Proyectar la población por sexo y edad con un esquema tipo Leslie adaptado a insumos anuales.
-- Comparar la estructura por edad y sexo proyectada vs observada en el último año disponible.
+
+* Estimar el tamaño del efecto promedio de las expectativas docentes sobre el CI.
+* Cuantificar y evaluar la heterogeneidad entre los diferentes estudios analizados.
+* Identificar estudios influyentes y valores atípicos (*outliers*) que impacten en la varianza global.
+* Examinar posibles sesgos de publicación y evaluar la robustez de los hallazgos mediante simulación de datos faltantes.
+* Realizar un análisis de potencia estadística retrospectivo para la muestra global.
+
+## Datos
+
+* **Dataset:** `dat.raudenbush1985` (disponible en el ecosistema de paquetes de meta-análisis de R).
+* **Efectos:** Diferencia de Medias Estandarizada (SMD) sobre el Cociente Intelectual.
+* **Tamaño:** 19 tamaños de efecto provenientes de 19 estudios independientes.
+* **Variables disponibles (por muestra):**
+  * `study`: identificador numérico del estudio
+  * `author`: autor y año de publicación
+  * `yi`: tamaño del efecto observado (SMD)
+  * `vi`: varianza del tamaño del efecto
+  * `n1i` / `n2i`: tamaños muestrales de los grupos experimental y control
+* **Nota:** el dataset proviene de una fuente pública del ecosistema de R (paquete `metadat` / `metafor`).
 
 ## Metodología
 
-### Parte 1 — Simulación de eventos demográficos
-- Insumos:
-  - Tasas de mortalidad por edad `Mx` (HMD).
-  - Tasas de fecundidad condicional al primer hijo `m1x` (HFD).
-- Procesamiento:
-  - Normalización de edades abiertas (“110+” → 110; “55+” → 55; “12-” → 12).
-  - Imputación de `0` cuando corresponde riesgo nulo (edades sin nacimientos / NA).
-- Simulación:
-  - Método de transformada inversa: `T = H^{-1}(-ln(U))`.
-  - Implementación numérica con función personalizada `ste()` (archivo `ste.r`).
-  - Manejo de eventos no universales asignando `Inf` a no ocurrencias (censura).
-- Validación:
-  - Comparación visual de curvas:
-    - Teórica: `exp(-H(t))`
-    - Simulada: Kaplan–Meier sobre 10.000 simulaciones
+* **Transformación de tamaños de efecto:** cálculo del error estándar (`seTE`) a partir de la varianza para los modelos de diferencias estandarizadas (SMD).
+* **Modelo principal:** modelo de efectos aleatorios utilizando el estimador REML (*Restricted Maximum Likelihood*) para estimar el efecto promedio.
+* **Heterogeneidad:** evaluación de heterogeneidad total entre estudios (estadístico $Q$ de Cochrane e índice $I^2$).
+* **Sensibilidad e Influencia:** análisis exploratorio de valores atípicos (*Leave-One-Out*, gráficos de Baujat y GOSH) mediante `dmetar`.
+* **Sesgo de publicación y robustez:** * Prueba de regresión de Egger y método de *Trim-and-Fill*.
+  * Simulación de 4 escenarios de datos faltantes (aleatorios y fijos).
+  * Análisis de potencia estadística retrospectivo utilizando `metapower`.
 
-### Parte 2 — Proyección de población
-- Insumos:
-  - Población por edad y sexo (HMD, 1-year ages).
-  - ASFR (HFD).
-  - Tablas de mortalidad por período `Lx` para mujeres y hombres (HMD, 1x1).
-- Preparación:
-  - Función `data_prep()` para filtrar año inicial común, limpiar edades y reestructurar a formato ancho.
-  - Se genera `last_pop.txt` con la estructura observada más reciente para la comparación final.
-- Proyección:
-  - Proyección anual por sexo usando una matriz tipo Leslie con supervivencia derivada de `Lx`.
-  - Nacimientos calculados con ASFR en edades fértiles (12–55).
-  - Distribución por sexo usando razón de masculinidad al nacer: `SRB = 1.05`.
-- Comparación:
-  - Pirámide observada vs proyectada para el último año disponible (2024).
-
-## Datos
-Fuentes:
-- **Human Mortality Database (HMD)**: mortalidad (`Mx`), life tables (`Lx`), población por edad y sexo.
-- **Human Fertility Database (HFD)**: tasas específicas de fecundidad por edad (ASFR) y tasas condicionales al primer hijo (`m1x`).
-
-> Nota: si los archivos originales no se incluyen en el repositorio, ver `data/README.md` para instrucciones de descarga y ubicación.
-
-## Herramientas y tecnologías
-- Lenguaje: **R**
-- Paquetes principales: `readxl`, `survival`
-- Formato de informe: **Quarto (.qmd) → PDF**
-- Scripts auxiliares: `ste.r` (función de simulación)
-
-## Estructura del proyecto
-/report
-  Parcial2.qmd          # informe principal (Quarto)
-/src
-  ste.r                 # función de simulación (transformada inversa)
-/data
-  (archivos HMD/HFD)    # si no se suben, dejar instrucciones
-/datos_parte_2
-  (archivos parte 2)    # insumos para proyección
 ## Resultados principales (resumen)
-- La simulación reproduce adecuadamente las tasas originales:
-  - Kaplan–Meier se superpone a la curva teórica en mortalidad y primer hijo.
-  - En fecundidad, la supervivencia no cae a 0, reflejando correctamente el evento no universal.
-- La proyección por componentes reproduce con alta coherencia la estructura observada (2024),
-  especialmente en edades centrales.
-- Diferencias esperables en extremos etarios por:
-  - ausencia de migración en el modelo,
-  - uso de tasas por período sin mejoras futuras,
-  - suavización de cohortes inherente al mecanismo Leslie.
+
+* Las expectativas de los docentes muestran un leve efecto positivo aunque no estadísticamente significativo sobre el rendimiento intelectual de los estudiantes.
+* Se observa una heterogeneidad sustancial entre estudios ($I^2 \approx 50\%$), sugiriendo que el tamaño del efecto varía según el contexto de cada experimento.
+* La remoción de estudios atípicos específicos (identificados en el análisis de influencia) estabiliza fuertemente la varianza no explicada ($\tau^2$).
+* Los análisis complementarios (simulación de datos faltantes, sesgo de publicación y potencia estadística) apoyan la robustez de la conclusión general, descartando que el efecto sea un mero artefacto de estudios no publicados.
 
 ## Cómo reproducir
+
 1. Clonar el repositorio.
-2. Colocar los archivos de datos en las carpetas correspondientes (`/data` y/o `/datos_parte_2`).
-3. Abrir `report/Parcial2.qmd` en RStudio.
-4. Ejecutar / renderizar a PDF (Quarto).
-5. Verificar que `src/ste.r` esté disponible (se carga con `source("ste.r")`).
+2. Abrir el proyecto en RStudio.
+3. Instalar las dependencias de R (`meta`, `metafor`, `metapower`, y `dmetar` vía GitHub).
+4. Ejecutar el script principal o compilar el informe:
+   * **Informe_MetaAnalisis.qmd** para generar el PDF (Quarto).
+   * **script_metaanalisis.R** para ejecutar el código de limpieza, modelado y gráficos.
+
+## Estructura del proyecto
+
+```text
+/MetaAnalisis_Efecto_Pigmalion
+ ├── README.md                  # Este archivo
+ ├── Informe_MetaAnalisis.qmd   # Informe (Quarto / R Markdown)
+ ├── Informe_MetaAnalisis.pdf   # Salida / Informe académico compilado
+ └── script_metaanalisis.R      # Scripts de análisis, simulación y modelado
 
 ## Autoría
-David Fernández  
-Juan Karawacki  
+* **Autores:** David Fernández & Franco Vicario
+* **Institución:** Facultad de Ciencias / Licenciatura en Estadística – Universidad de la República (UdelaR)
 
-(Parcial/Trabajo académico)
+---

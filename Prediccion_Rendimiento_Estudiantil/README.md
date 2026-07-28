@@ -1,104 +1,63 @@
-# Parcial 2 – Simulación de eventos demográficos y proyección de población (USA)
+# Proyecto Final – Análisis y Predicción del Rendimiento Estudiantil (Portugal)
 
 ## Descripción
-Este proyecto implementa dos componentes principales en Demografía/Modelos poblacionales:
+Este proyecto implementa tres componentes principales orientados al análisis de datos educativos y Machine Learning:
 
-1) **Simulación de trayectorias individuales** para eventos demográficos usando el método de la
-transformada inversa bajo un **riesgo constante por intervalos (piecewise-constant hazard)**.
-Se simulan dos eventos:
-- **Mortalidad (fallecimiento)**: evento universal.
-- **Primer hijo (fecundidad condicional)**: evento no universal (puede no ocurrir).
+1) **Análisis exploratorio y procesamiento de datos (Data Wrangling)** de bases de datos relacionales de estudiantes de secundaria (asignaturas Matemática y Portugués), evaluando factores demográficos, socioeconómicos y académicos.
+2) **Modelado predictivo (Machine Learning)** mediante algoritmos de partición recursiva (Árboles de decisión) para identificar variables clave que influyen en las calificaciones y detectar perfiles de riesgo de desaprobación.
+3) **Desarrollo de un producto de datos interactivo** (Dashboard en Shiny) para la exploración visual del rendimiento académico y apoyo en la toma de decisiones.
 
-2) **Proyección de población por sexo y edad** mediante el **método de los componentes**,
-utilizando tasas específicas de fecundidad por edad y tablas de mortalidad por período
-(hombres y mujeres), con comparación final entre pirámide observada vs proyectada.
-
-Caso de estudio: **Estados Unidos**, datos del período con foco en **2015** para la simulación,
-y proyección desde el primer año común disponible hasta el último año con datos (comparación
-final en 2024).
+Caso de estudio: **Estudiantes de secundaria en Portugal** (escuelas Gabriel Pereira y Mousinho da Silveira), utilizando el *Student Performance Data Set* (UCI Machine Learning Repository).
 
 ## Objetivos
-- Simular tiempos de ocurrencia de eventos demográficos a partir de tasas por edad usando
-  transformada inversa y riesgo constante por intervalos.
-- Validar la simulación comparando **Kaplan–Meier** vs supervivencia teórica `S(t)=exp(-H(t))`.
-- Proyectar la población por sexo y edad con un esquema tipo Leslie adaptado a insumos anuales.
-- Comparar la estructura por edad y sexo proyectada vs observada en el último año disponible.
+- Explorar la distribución demográfica y socioeconómica de los estudiantes.
+- Identificar los factores personales, familiares y académicos con mayor influencia en la calificación final (G3).
+- Entrenar un modelo de clasificación algorítmica (Árboles de decisión) para predecir el riesgo de fracaso escolar.
+- Desarrollar una aplicación web interactiva que permita a usuarios no técnicos visualizar métricas y simular perfiles estudiantiles.
 
 ## Metodología
 
-### Parte 1 — Simulación de eventos demográficos
-- Insumos:
-  - Tasas de mortalidad por edad `Mx` (HMD).
-  - Tasas de fecundidad condicional al primer hijo `m1x` (HFD).
-- Procesamiento:
-  - Normalización de edades abiertas (“110+” → 110; “55+” → 55; “12-” → 12).
-  - Imputación de `0` cuando corresponde riesgo nulo (edades sin nacimientos / NA).
-- Simulación:
-  - Método de transformada inversa: `T = H^{-1}(-ln(U))`.
-  - Implementación numérica con función personalizada `ste()` (archivo `ste.r`).
-  - Manejo de eventos no universales asignando `Inf` a no ocurrencias (censura).
-- Validación:
-  - Comparación visual de curvas:
-    - Teórica: `exp(-H(t))`
-    - Simulada: Kaplan–Meier sobre 10.000 simulaciones
+### Parte 1 — Procesamiento de datos y Análisis Exploratorio (EDA)
+- Integración de los conjuntos de datos de Matemática y Portugués mediante uniones relacionales (`left_join`).
+- Limpieza, recodificación de variables (hábitos de estudio, ausentismo) y resolución de discrepancias en los registros.
 
-### Parte 2 — Proyección de población
-- Insumos:
-  - Población por edad y sexo (HMD, 1-year ages).
-  - ASFR (HFD).
-  - Tablas de mortalidad por período `Lx` para mujeres y hombres (HMD, 1x1).
-- Preparación:
-  - Función `data_prep()` para filtrar año inicial común, limpiar edades y reestructurar a formato ancho.
-  - Se genera `last_pop.txt` con la estructura observada más reciente para la comparación final.
-- Proyección:
-  - Proyección anual por sexo usando una matriz tipo Leslie con supervivencia derivada de `Lx`.
-  - Nacimientos calculados con ASFR en edades fértiles (12–55).
-  - Distribución por sexo usando razón de masculinidad al nacer: `SRB = 1.05`.
-- Comparación:
-  - Pirámide observada vs proyectada para el último año disponible (2024).
+### Parte 2 — Modelado Predictivo
+- Implementación de árboles de decisión (Recursive Partitioning) con el paquete `rpart`.
+- Visualización de las reglas de clasificación y nodos de segmentación de alumnos mediante `rpart.plot`.
 
-## Datos
-Fuentes:
-- **Human Mortality Database (HMD)**: mortalidad (`Mx`), life tables (`Lx`), población por edad y sexo.
-- **Human Fertility Database (HFD)**: tasas específicas de fecundidad por edad (ASFR) y tasas condicionales al primer hijo (`m1x`).
-
-> Nota: si los archivos originales no se incluyen en el repositorio, ver `data/README.md` para instrucciones de descarga y ubicación.
+### Parte 3 — Aplicación Interactiva (Dashboard)
+- Creación de un Dashboard utilizando `shiny` y `shinydashboard` para dinamizar la exploración de los perfiles de riesgo y cruzar variables en tiempo real.
 
 ## Herramientas y tecnologías
 - Lenguaje: **R**
-- Paquetes principales: `readxl`, `survival`
+- Paquetes principales: `tidyverse`, `rpart`, `rpart.plot`, `shiny`, `shinydashboard`
 - Formato de informe: **Quarto (.qmd) → PDF**
-- Scripts auxiliares: `ste.r` (función de simulación)
 
 ## Estructura del proyecto
 /report
-  Parcial2.qmd          # informe principal (Quarto)
-/src
-  ste.r                 # función de simulación (transformada inversa)
+  Informe_Rendimiento_Estudiantil.qmd    # Informe principal (código fuente en Quarto)
+  Informe_Rendimiento_Estudiantil.pdf    # Informe académico renderizado
 /data
-  (archivos HMD/HFD)    # si no se suben, dejar instrucciones
-/datos_parte_2
-  (archivos parte 2)    # insumos para proyección
-## Resultados principales (resumen)
-- La simulación reproduce adecuadamente las tasas originales:
-  - Kaplan–Meier se superpone a la curva teórica en mortalidad y primer hijo.
-  - En fecundidad, la supervivencia no cae a 0, reflejando correctamente el evento no universal.
-- La proyección por componentes reproduce con alta coherencia la estructura observada (2024),
-  especialmente en edades centrales.
-- Diferencias esperables en extremos etarios por:
-  - ausencia de migración en el modelo,
-  - uso de tasas por período sin mejoras futuras,
-  - suavización de cohortes inherente al mecanismo Leslie.
+  student-mat.csv       # Dataset de Matemática
+  student-por.csv       # Dataset de Portugués
+/app
+  app.R                 # Código de la aplicación interactiva (Shiny)
 
-## Cómo reproducir
-1. Clonar el repositorio.
-2. Colocar los archivos de datos en las carpetas correspondientes (`/data` y/o `/datos_parte_2`).
-3. Abrir `report/Parcial2.qmd` en RStudio.
-4. Ejecutar / renderizar a PDF (Quarto).
-5. Verificar que `src/ste.r` esté disponible (se carga con `source("ste.r")`).
+## Resultados principales (resumen)
+- Se identificaron las variables socioeconómicas e institucionales que más impactan en la calificación final (G3).
+- El modelo de árbol de decisión logró segmentar exitosamente a los estudiantes en grupos de alto y bajo riesgo de desaprobación, generando reglas fácilmente interpretables.
+- El Dashboard interactivo demostró ser una herramienta útil para que autoridades educativas puedan tomar decisiones basadas en evidencia (Data-Driven) y aplicar apoyo temprano de manera focalizada.
+
+##  Requisitos y Reproducción
+
+### Requisitos previos
+Para ejecutar el código y renderizar el informe es necesario contar con **R** y **RStudio**, además de tener instalados los siguientes paquetes:
+
+```r
+install.packages(c("tidyverse", "rpart", "rpart.plot", "vip", "parsnip", "ranger", "shiny", "shinydashboard"))
 
 ## Autoría
-David Fernández  
-Juan Karawacki  
+* **Autores:** David Fernández & Franco Vicario
+* **Institución:** Facultad de Ciencias / Licenciatura en Estadística – Universidad de la República (UdelaR)
 
-(Parcial/Trabajo académico)
+---
