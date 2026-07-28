@@ -55,6 +55,7 @@ Para ejecutar el código y renderizar el informe es necesario contar con **R** y
 
 ```r
 install.packages(c("tidyverse", "rpart", "rpart.plot", "vip", "parsnip", "ranger", "shiny", "shinydashboard"))
+```
 
 ## Autoría
 * **Autores:** David Fernández & Franco Vicario

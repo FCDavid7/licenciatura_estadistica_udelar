@@ -10,12 +10,12 @@ El repositorio reúne proyectos orientados al análisis estadístico, modelado p
 
 El repositorio incluye proyectos correspondientes a las siguientes áreas de estudio:
 
-* **[Predicción de Rendimiento Estudiantil (Machine Learning & Dashboards)](./Proyecto_Rendimiento)**
+* **[Predicción de Rendimiento Estudiantil (Machine Learning & Dashboards)](./Prediccion_Rendimiento_Estudiantil)**
   * Análisis de factores socioeconómicos, demográficos y académicos.
   * Implementación de árboles de decisión (Recursive Partitioning) para identificar perfiles de riesgo.
   * Desarrollo de una aplicación web interactiva en Shiny para la exploración visual de datos y apoyo en la toma de decisiones educativas.
 
-* **[Meta-análisis (Efecto Pigmalión)](./Proyecto_MetaAnalisis)**
+* **[Meta-análisis (Efecto Pigmalión)](./Proyecto_Meta_Analisis)**
   * Síntesis de evidencia sobre la influencia de las expectativas docentes en el desempeño de los alumnos (basado en datos de Raudenbush, 1985).
   * Evaluación de heterogeneidad (modelos de efectos fijos y aleatorios), análisis de subgrupos e influencia de valores atípicos (outliers).
   * Análisis de sesgo de publicación (Funnel plots) y cálculos de potencia estadística (power analysis).

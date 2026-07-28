@@ -59,6 +59,7 @@ Este proyecto realiza un meta-análisis sobre el "Efecto Pigmalión" en el ámbi
  ├── Informe_MetaAnalisis.qmd   # Informe (Quarto / R Markdown)
  ├── Informe_MetaAnalisis.pdf   # Salida / Informe académico compilado
  └── script_metaanalisis.R      # Scripts de análisis, simulación y modelado
+```
 
 ## Autoría
 * **Autores:** David Fernández & Franco Vicario
